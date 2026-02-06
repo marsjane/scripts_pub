@@ -128,6 +128,51 @@ echo ">>> 检查/安装基础工具..."
 install_packages curl wget vim git htop zsh ca-certificates ncurses
 
 #######################################
+# SSH service check / install / enable
+#######################################
+
+echo ">>> 检查 SSH 服务状态..."
+
+ensure_ssh_service() {
+    case "$DISTRO_FAMILY" in
+        arch)
+            SSH_PKG="openssh"
+            SSH_SERVICE="sshd"
+            ;;
+        debian)
+            SSH_PKG="openssh-server"
+            SSH_SERVICE="ssh"
+            ;;
+    esac
+
+    # 1. 是否已安装 sshd
+    if ! command -v sshd >/dev/null 2>&1; then
+        echo ">>> 未检测到 sshd，安装 $SSH_PKG ..."
+        install_packages "$SSH_PKG"
+    fi
+
+    # 2. 是否存在 systemd service
+    if ! systemctl list-unit-files | grep -q "^${SSH_SERVICE}\.service"; then
+        echo "❌ 未找到 ${SSH_SERVICE}.service，SSH 安装可能失败"
+        return 1
+    fi
+
+    # 3. 启动并设置开机自启
+    if ! systemctl is-active --quiet "$SSH_SERVICE"; then
+        echo ">>> 启动 SSH 服务 ($SSH_SERVICE)..."
+        sudo systemctl enable --now "$SSH_SERVICE"
+    else
+        echo ">>> SSH 服务已在运行"
+    fi
+
+    # 4. 输出最终状态
+    echo ">>> SSH 服务状态："
+    systemctl --no-pager --full status "$SSH_SERVICE" || true
+}
+
+ensure_ssh_service
+
+#######################################
 # Oh My Zsh
 #######################################
 
