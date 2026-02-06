@@ -23,21 +23,13 @@ echo ">>> 检查/安装基础工具..."
 sudo apt-get update
 sudo apt-get install -y curl wget vim git htop zsh ca-certificates ncurses-bin
 
-# --- 4. 配置 Ghostty Terminfo ---
-if ! infocmp xterm-ghostty >/dev/null 2>&1; then
-    echo ">>> 安装 Ghostty Terminfo..."
-    curl -sSL https://raw.githubusercontent.com/ghostty-org/ghostty/main/terminals/ghostty.terminfo -o /tmp/ghostty.terminfo
-    tic -x /tmp/ghostty.terminfo
-    rm /tmp/ghostty.terminfo
-fi
-
-# --- 5. 安装 Oh My Zsh ---
+# --- 4. 安装 Oh My Zsh ---
 if [ ! -d "$HOME/.oh-my-zsh" ]; then
     echo ">>> 安装 Oh My Zsh..."
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 fi
 
-# --- 6. 安装 Zsh 插件 ---
+# --- 5. 安装 Zsh 插件 ---
 ZSH_CUSTOM="$HOME/.oh-my-zsh/custom"
 # 自动建议
 if [ ! -d "$ZSH_CUSTOM/plugins/zsh-autosuggestions" ]; then
@@ -48,7 +40,7 @@ if [ ! -d "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting" ]; then
     git clone --depth 1 https://github.com/zsh-users/zsh-syntax-highlighting "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"
 fi
 
-# --- 7. 更新 .zshrc ---
+# --- 6. 更新 .zshrc ---
 echo ">>> 更新 .zshrc 配置..."
 # 修改主题 (仅当是默认主题时修改)
 sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="ys"/' "$HOME/.zshrc"
@@ -71,7 +63,7 @@ alias ..='cd ..'
 EOF
 fi
 
-# --- 8. 配置 Vim ---
+# --- 7. 配置 Vim ---
 # Vim 配置通常直接覆盖即可，如果想保留手动修改，可以加判断
 if [ ! -f "$HOME/.vimrc" ] || ! grep -q "set cursorline" "$HOME/.vimrc"; then
     cat <<EOF > "$HOME/.vimrc"
@@ -84,7 +76,7 @@ set cursorline
 EOF
 fi
 
-# --- 9. 更改默认 Shell ---
+# --- 8. 更改默认 Shell ---
 if [[ "$SHELL" != *zsh ]]; then
     echo ">>> 更改默认 Shell 为 Zsh..."
     sudo chsh -s "$(which zsh)" "$USER"
@@ -92,4 +84,5 @@ fi
 
 echo "---"
 echo "✅ 初始化/检查完成！"
+echo "如果是Ghostty，考虑运行infocmp -x xterm-ghostty | ssh YOUR-SERVER -- tic -x -"
 echo "💡 如果是首次运行，请执行 'exec zsh' 或重新连接 SSH。"
