@@ -125,7 +125,7 @@ export LC_ALL=en_US.UTF-8
 #######################################
 
 echo ">>> 检查/安装基础工具..."
-install_packages curl wget vim git htop zsh ca-certificates ncurses
+install_packages curl wget vim git htop zsh ca-certificates
 
 #######################################
 # SSH service check / install / enable
