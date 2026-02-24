@@ -215,6 +215,15 @@ if ! grep -q "zsh-autosuggestions" "$ZSHRC"; then
     sed -i 's/plugins=(git)/plugins=(git zsh-autosuggestions zsh-syntax-highlighting)/' "$ZSHRC"
 fi
 
+# Keymap
+if ! grep -q "# KEYMAP" "$ZSHRC"; then
+    cat <<EOF >> "$ZSHRC"
+
+# KEYMAP
+bindkey '^[[Z' autosuggest-accept    # shift + tab  | autosuggest
+EOF
+fi
+
 # Custom block
 if ! grep -q "# CUSTOM_CONFIG_MARKER" "$ZSHRC"; then
     cat <<EOF >> "$ZSHRC"
