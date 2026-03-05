@@ -297,6 +297,7 @@ maxretry = 5
 
 [sshd]
 enabled = true
+backend = systemd
 EOF
 
 systemctl restart fail2ban
