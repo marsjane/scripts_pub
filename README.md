@@ -10,3 +10,13 @@ curl -fsSL https://raw.githubusercontent.com/marsjane/scripts_pub/refs/heads/mai
 ```
 curl -fsSL https://raw.githubusercontent.com/marsjane/scripts_pub/refs/heads/main/vps_init.sh -o vps_init.sh
 ```
+```
+# run with root
+bash vps_init.sh
+# run with user
+sudo -i
+bash vps_init.sh --fail2ban
+bash vps_init.sh --bbr
+exit
+bash vps_init.sh --shell
+```
