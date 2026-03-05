@@ -4,9 +4,10 @@
 # 适用系统: Ubuntu 22.04
 # 执行身份: root
 # 用法:
-#   常规初始化:  bash vps_init.sh
-#   开启BBR:     bash vps_init.sh --bbr
-#   配置Shell:   bash vps_init.sh --shell
+#   常规初始化:        bash vps_init.sh
+#   开启BBR:           bash vps_init.sh --bbr
+#   配置Shell:         bash vps_init.sh --shell
+#   Fail2ban状态检查:  bash vps_init.sh --fail2ban
 # ============================================================
 
 set -e
@@ -40,8 +41,24 @@ confirm() {
 }
 
 # ─────────────────────────────────────────
-# 分支模式: --bbr / --shell
+# 分支模式: --bbr / --shell / --fail2ban
 # ─────────────────────────────────────────
+if [[ "$1" == "--fail2ban" ]]; then
+    # ── Fail2ban 状态检查 ──────────────────
+    echo ""
+    info "====== Fail2ban 状态检查 ======"
+    echo ""
+    fail2ban-client status
+    echo ""
+    fail2ban-client status sshd
+
+    if confirm "是否解封所有当前被封禁的 IP?"; then
+        fail2ban-client unban --all
+        success "已解封所有 IP。"
+    fi
+    exit 0
+fi
+
 if [[ "$1" == "--bbr" ]]; then
     # ── BBR 加速 ──────────────────────────
     echo ""
@@ -284,17 +301,7 @@ EOF
 
 systemctl restart fail2ban
 systemctl enable fail2ban
-success "Fail2ban 已启动并设置为开机自启。"
-
-echo ""
-fail2ban-client status
-echo ""
-fail2ban-client status sshd
-
-if confirm "是否解封所有当前被封禁的 IP?"; then
-    fail2ban-client unban --all
-    success "已解封所有 IP。"
-fi
+success "Fail2ban 已安装并设置为开机自启。"
 
 # ─────────────────────────────────────────
 # 完成
@@ -305,7 +312,16 @@ echo -e "${GREEN}  VPS 初始化配置完成！${NC}"
 echo -e "${GREEN}============================================================${NC}"
 echo ""
 info "后续可选操作（建议在新 Shell 会话中执行）："
-echo "  开启 BBR 加速:    bash vps_init.sh --bbr"
-echo "  配置 Shell 环境:  bash vps_init.sh --shell"
+echo "  Fail2ban 状态检查: bash vps_init.sh --fail2ban"
+echo "  开启 BBR 加速:     bash vps_init.sh --bbr"
+echo "  配置 Shell 环境:   bash vps_init.sh --shell"
+echo ""
+if confirm "是否现在重启系统? (重启后请执行 --fail2ban 做状态检查)"; then
+    info "系统将在 5 秒后重启..."
+    sleep 5
+    reboot
+else
+    info "跳过重启。可稍后手动执行 reboot，再运行 bash vps_init.sh --fail2ban 做检查。"
+fi
 echo ""
 success "祝使用愉快！"
