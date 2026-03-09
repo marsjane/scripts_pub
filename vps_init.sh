@@ -198,11 +198,10 @@ if [[ -z "$PUB_KEY" ]]; then
     exit 1
 fi
 
-mkdir -p "$SSH_DIR"
-echo "${PUB_KEY} SSH-VPS" >> "$AUTH_KEYS"
+sudo -u "$NEW_USER" mkdir -p "$SSH_DIR"
+sudo -u "$NEW_USER" bash -c "echo '${PUB_KEY} SSH-VPS' >> '$AUTH_KEYS'"
 chmod 700 "$SSH_DIR"
 chmod 600 "$AUTH_KEYS"
-chown -R "$NEW_USER":"$NEW_USER" "$SSH_DIR"
 success "公钥已写入 $AUTH_KEYS"
 
 # 7. SSH 安全配置
