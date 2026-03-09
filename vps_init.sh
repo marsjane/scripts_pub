@@ -237,21 +237,6 @@ PermitRootLogin no
 PasswordAuthentication no
 EOF
 
-systemctl restart sshd || systemctl restart ssh
-systemctl status sshd --no-pager || systemctl status ssh --no-pager || true
-success "SSH 安全配置完成，端口: $SSH_PORT"
-
-echo ""
-warn "=========================================================="
-warn "  重要提示: 请【新开一个终端窗口】，使用新端口 $SSH_PORT"
-warn "  以及用户 '$NEW_USER' 和你的 SSH 密钥尝试登录。"
-warn "  登录成功后再回到此窗口继续！"
-warn "=========================================================="
-if ! confirm "SSH 新窗口登录测试成功，继续下一步?"; then
-    error "请先确认 SSH 登录成功后再继续，脚本退出。"
-    exit 1
-fi
-
 # 8. 配置 UFW 防火墙
 echo ""
 info "====== 步骤 8/9: 配置 UFW 防火墙 ======"
@@ -293,9 +278,26 @@ echo ""
 ufw status verbose
 echo ""
 warn "请确认以上防火墙规则无误。"
-if ! confirm "UFW 规则确认无误，继续?"; then
+if ! confirm "UFW 规则确认无误，继续（将重启sshd服务）?"; then
     warn "如需调整，请手动执行 ufw 相关命令后继续。"
 fi
+
+systemctl restart sshd || systemctl restart ssh
+systemctl status sshd --no-pager || systemctl status ssh --no-pager || true
+success "SSH 安全配置完成，端口: $SSH_PORT"
+
+echo ""
+warn "=========================================================="
+warn "  重要提示: 请【新开一个终端窗口】，使用新端口 $SSH_PORT"
+warn "  以及用户 '$NEW_USER' 和你的 SSH 密钥尝试登录。"
+warn "  登录成功后再回到此窗口继续！"
+warn "=========================================================="
+if ! confirm "SSH 新窗口登录测试成功，继续下一步?"; then
+    error "请先确认 SSH 登录成功后再继续，脚本退出。"
+    exit 1
+fi
+
+
 
 # 9. 安装并配置 Fail2ban
 echo ""
