@@ -41,6 +41,58 @@ confirm() {
 }
 
 # ─────────────────────────────────────────
+# 检查旧 iptables 规则是否干扰 ufw
+# ─────────────────────────────────────────
+check_iptables_conflicts() {
+    echo ""
+    info "检查是否有旧 iptables 规则干扰 ufw..."
+
+    # 获取第一条 ufw 链的行号
+    local ufw_line
+    ufw_line=$(iptables -L INPUT --line-numbers -n 2>/dev/null \
+        | grep "ufw-before" | head -1 | awk '{print $1}')
+
+    if [[ -z "$ufw_line" ]]; then
+        warn "未找到 ufw 链，ufw 可能未正常启用"
+        return
+    fi
+
+    # 找出排在 ufw 之前的 REJECT / DROP 规则
+    local blocking_rules
+    blocking_rules=$(iptables -L INPUT --line-numbers -n \
+        | awk -v ufw="$ufw_line" 'NR>2 && $1+0 < ufw+0 && /REJECT|DROP/')
+
+    if [[ -n "$blocking_rules" ]]; then
+        warn "⚠️  发现以下旧规则排在 ufw 之前，可能导致 ufw 失效："
+        echo "$blocking_rules"
+        echo ""
+        if confirm "是否自动清除这些冲突规则（推荐）?"; then
+            # 从大行号到小行号倒序删除，避免行号偏移
+            echo "$blocking_rules" | awk '{print $1}' | sort -rn | while read -r num; do
+                iptables -D INPUT "$num"
+                info "已删除 INPUT 第 $num 行规则"
+            done
+            # 同步保存（覆盖掉旧的持久化规则）
+            if [[ -f /etc/iptables/rules.v4 ]]; then
+                iptables-save > /etc/iptables/rules.v4
+                info "已同步保存到 /etc/iptables/rules.v4"
+            fi
+            success "冲突规则已清除"
+        else
+            warn "已跳过，请手动处理后验证 ufw 是否生效"
+        fi
+    else
+        success "未发现冲突规则，ufw 正常生效"
+    fi
+
+    echo ""
+    info "当前 INPUT 链："
+    echo "──────────────────────────────────────────────────────"
+    iptables -L INPUT -n --line-numbers
+    echo "──────────────────────────────────────────────────────"
+}
+
+# ─────────────────────────────────────────
 # 分支模式: --bbr / --shell / --fail2ban
 # ─────────────────────────────────────────
 if [[ "$1" == "--fail2ban" ]]; then
@@ -364,6 +416,8 @@ elif [[ "$FIREWALL_CHOICE" == "2" ]]; then
     ufw --force enable
     echo ""
     ufw status verbose
+    # 检查旧 iptables 规则是否在 ufw 之前干扰流量
+    check_iptables_conflicts
     echo ""
     warn "请确认以上防火墙规则无误。"
     if ! confirm "UFW 规则确认无误，继续（将重启 sshd 服务）?"; then
