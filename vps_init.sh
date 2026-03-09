@@ -122,26 +122,41 @@ fi
 # 3. 创建新用户
 echo ""
 info "====== 步骤 3/9: 创建新用户 ======"
-while true; do
-    read -rp "$(echo -e "${YELLOW}请输入要创建的用户名: ${NC}")" NEW_USER
-    if [[ -z "$NEW_USER" ]]; then
-        warn "用户名不能为空，请重新输入。"
-    elif [[ ! "$NEW_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
-        warn "用户名格式不合法（只允许小写字母、数字、下划线、连字符，且必须以字母或下划线开头）。"
-    else
-        break
-    fi
-done
-
-if id "$NEW_USER" &>/dev/null; then
-    warn "用户 '$NEW_USER' 已存在，跳过创建。"
+if ! confirm "是否需要创建新用户?"; then
+    info "跳过创建新用户。"
+    while true; do
+        read -rp "$(echo -e "${YELLOW}请输入用于后续配置的已有用户名: ${NC}")" NEW_USER
+        if [[ -z "$NEW_USER" ]]; then
+            warn "用户名不能为空，请重新输入。"
+        elif [[ ! -d "/home/$NEW_USER" ]]; then
+            warn "用户家目录 /home/$NEW_USER 不存在，请输入有效的用户名。"
+        else
+            success "将使用用户 '$NEW_USER' 进行后续配置。"
+            break
+        fi
+    done
 else
-    adduser "$NEW_USER"
-    success "用户 '$NEW_USER' 创建成功。"
-fi
+    while true; do
+        read -rp "$(echo -e "${YELLOW}请输入要创建的用户名: ${NC}")" NEW_USER
+        if [[ -z "$NEW_USER" ]]; then
+            warn "用户名不能为空，请重新输入。"
+        elif [[ ! "$NEW_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+            warn "用户名格式不合法（只允许小写字母、数字、下划线、连字符，且必须以字母或下划线开头）。"
+        else
+            break
+        fi
+    done
 
-usermod -aG sudo "$NEW_USER"
-success "用户 '$NEW_USER' 已加入 sudo 组。"
+    if id "$NEW_USER" &>/dev/null; then
+        warn "用户 '$NEW_USER' 已存在，跳过创建。"
+    else
+        adduser "$NEW_USER"
+        success "用户 '$NEW_USER' 创建成功。"
+    fi
+
+    usermod -aG sudo "$NEW_USER"
+    success "用户 '$NEW_USER' 已加入 sudo 组。"
+fi
 
 # 4. 更新 & 升级软件包
 echo ""
