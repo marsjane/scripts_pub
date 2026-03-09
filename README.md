@@ -18,5 +18,6 @@ sudo -i
 bash vps_init.sh --fail2ban
 bash vps_init.sh --bbr
 exit
+sudo cp /root/vps_init.sh ./
 bash vps_init.sh --shell
 ```
