@@ -382,16 +382,40 @@ if [[ "$FIREWALL_CHOICE" == "1" ]]; then
         fi
     done
 
+    # ── 是否开启流量转发（代理软件需要）──────────────────────
+    echo ""
+    info "是否需要开启流量转发？（用于代理软件如 3x-ui / Xray / WireGuard 等）"
+    if confirm "开启流量转发?"; then
+        # 开启内核 ip_forward
+        sysctl -w net.ipv4.ip_forward=1
+        if ! grep -q "^net.ipv4.ip_forward=1" /etc/sysctl.conf; then
+            echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+        fi
+        sysctl -p
+
+        # 把 FORWARD REJECT 直接替换成 ACCEPT
+        sed -i 's/^-A FORWARD -j REJECT.*/-A FORWARD -j ACCEPT/' "$RULES_FILE"
+
+        success "流量转发已开启，FORWARD 链已更新"
+    else
+        info "跳过，FORWARD 链保持默认拒绝"
+    fi
+
     # 加载规则
     info "正在加载 iptables 规则..."
     iptables-restore < "$RULES_FILE"
     success "iptables 规则加载完成。"
 
-    # 打印当前 INPUT 链供用户确认
+    # 打印当前规则供用户确认
     echo ""
     info "当前 INPUT 链规则："
     echo "──────────────────────────────────────────────────────"
     iptables -L INPUT -n --line-numbers
+    echo "──────────────────────────────────────────────────────"
+    echo ""
+    info "当前 FORWARD 链规则："
+    echo "──────────────────────────────────────────────────────"
+    iptables -L FORWARD -n --line-numbers
     echo "──────────────────────────────────────────────────────"
     echo ""
     warn "请确认以上防火墙规则无误。"
