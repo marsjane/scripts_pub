@@ -237,49 +237,138 @@ PermitRootLogin no
 PasswordAuthentication no
 EOF
 
-# 8. 配置 UFW 防火墙
+# ─────────────────────────────────────────────────────────────
+# 8. 配置防火墙
+# ─────────────────────────────────────────────────────────────
 echo ""
-info "====== 步骤 8/9: 配置 UFW 防火墙 ======"
-apt install -y ufw
-
-ufw default deny incoming
-ufw default allow outgoing
-
-# 询问用户需要额外开放的端口
+info "====== 步骤 8/9: 配置防火墙 ======"
 echo ""
-info "除 HTTP(80)、HTTPS(443) 和 SSH($SSH_PORT) 外，是否还需要开放其他端口?"
-info "请以逗号分隔输入端口号，例如: 3000,8080,9000"
-info "不需要则直接回车跳过。"
+info "请选择防火墙管理方式:"
+echo "  1) iptables  (推荐用于 Oracle Cloud，保留 InstanceServices 链)"
+echo "  2) ufw       (适合普通 VPS，管理更简单)"
+echo ""
+
+FIREWALL_CHOICE=""
+while true; do
+    read -rp "$(echo -e "${YELLOW}请输入选项 [1/2]: ${NC}")" FIREWALL_CHOICE
+    case "$FIREWALL_CHOICE" in
+        1|2) break ;;
+        *) warn "请输入 1 或 2" ;;
+    esac
+done
+
+# ── 收集需要开放的端口（两种模式都需要）──────────────────────
+echo ""
+info "默认开放：SSH($SSH_PORT/tcp)、HTTP(80/tcp)、HTTPS(443/tcp)"
+info "是否还需要开放其他端口？格式：端口号或端口/协议，逗号分隔"
+info "例如: 3000,8080,53/udp，不需要则直接回车跳过。"
 read -rp "$(echo -e "${YELLOW}额外端口 (留空跳过): ${NC}")" EXTRA_PORTS
 
-# 开放 SSH 端口
-ufw allow "${SSH_PORT}/tcp"
-
-# 开放 HTTP / HTTPS
-ufw allow http
-ufw allow https
-
-# 开放用户自定义端口
+# 把默认端口 + 用户自定义端口合并成一个数组
+ALL_PORTS=("${SSH_PORT}/tcp" "80/tcp" "443/tcp")
 if [[ -n "$EXTRA_PORTS" ]]; then
-    IFS=',' read -ra PORT_LIST <<< "$EXTRA_PORTS"
-    for port in "${PORT_LIST[@]}"; do
-        port=$(echo "$port" | tr -d ' ')
-        if [[ "$port" =~ ^[0-9]+$ ]]; then
-            ufw allow "${port}/tcp"
-            success "已开放端口: $port/tcp"
+    IFS=',' read -ra EXTRA_LIST <<< "$EXTRA_PORTS"
+    for p in "${EXTRA_LIST[@]}"; do
+        p=$(echo "$p" | tr -d ' ')
+        if [[ "$p" =~ ^[0-9]+(\/[a-z]+)?$ ]]; then
+            ALL_PORTS+=("$p")
         else
-            warn "无效端口格式，跳过: $port"
+            warn "无效端口格式，跳过: $p"
         fi
     done
 fi
 
-ufw --force enable
-echo ""
-ufw status verbose
-echo ""
-warn "请确认以上防火墙规则无误。"
-if ! confirm "UFW 规则确认无误，继续（将重启sshd服务）?"; then
-    warn "如需调整，请手动执行 ufw 相关命令后继续。"
+# ────────────────────────────────────────
+# 模式一：iptables
+# ────────────────────────────────────────
+if [[ "$FIREWALL_CHOICE" == "1" ]]; then
+    RULES_FILE="/etc/iptables/rules.v4"
+    BACKUP_DIR="/etc/iptables/backups"
+
+    if [[ ! -f "$RULES_FILE" ]]; then
+        error "找不到 $RULES_FILE，请确认系统已有 iptables 规则文件。"
+        exit 1
+    fi
+
+    # 备份
+    mkdir -p "$BACKUP_DIR"
+    cp "$RULES_FILE" "$BACKUP_DIR/rules.v4.$(date +%Y%m%d_%H%M%S)"
+    info "已备份 iptables 规则到 $BACKUP_DIR"
+
+    # 逐个端口写入（插到 REJECT 行之前）
+    for entry in "${ALL_PORTS[@]}"; do
+        # 解析 port 和 proto
+        if [[ "$entry" =~ ^([0-9]+)\/([a-z]+)$ ]]; then
+            PORT="${BASH_REMATCH[1]}"
+            PROTO="${BASH_REMATCH[2]}"
+        else
+            PORT="$entry"
+            PROTO="tcp"
+        fi
+
+        RULE="-A INPUT -p ${PROTO} -m state --state NEW -m ${PROTO} --dport ${PORT} -j ACCEPT"
+
+        # 检查是否已存在该端口的规则
+        if grep -qP "\-\-dport ${PORT}(?=\s|$)" "$RULES_FILE"; then
+            # 已存在且是 ACCEPT → 跳过
+            if grep -P "\-\-dport ${PORT}(?=\s|$)" "$RULES_FILE" | grep -q "ACCEPT"; then
+                warn "端口 ${PORT}/${PROTO} 已是 ACCEPT，跳过"
+                continue
+            else
+                # 存在但不是 ACCEPT（如 REJECT/DROP）→ 删除旧的再插入
+                warn "端口 ${PORT}/${PROTO} 存在但非 ACCEPT，替换..."
+                sed -i "/--dport ${PORT}\b/d" "$RULES_FILE"
+            fi
+        fi
+
+        # 插入到 REJECT 兜底行之前
+        if grep -q "^-A INPUT -j REJECT" "$RULES_FILE"; then
+            sed -i "/^-A INPUT -j REJECT/i ${RULE}" "$RULES_FILE"
+            success "已添加端口: ${PORT}/${PROTO}"
+        else
+            error "找不到 '-A INPUT -j REJECT' 行，无法插入端口 ${PORT}，请手动检查 $RULES_FILE"
+        fi
+    done
+
+    # 加载规则
+    info "正在加载 iptables 规则..."
+    iptables-restore < "$RULES_FILE"
+    success "iptables 规则加载完成。"
+
+    # 打印当前 INPUT 链供用户确认
+    echo ""
+    info "当前 INPUT 链规则："
+    echo "──────────────────────────────────────────────────────"
+    iptables -L INPUT -n --line-numbers
+    echo "──────────────────────────────────────────────────────"
+    echo ""
+    warn "请确认以上防火墙规则无误。"
+    if ! confirm "iptables 规则确认无误，继续（将重启 sshd 服务）?"; then
+        warn "如需调整，请手动编辑 $RULES_FILE 后执行 iptables-restore < $RULES_FILE"
+    fi
+
+# ────────────────────────────────────────
+# 模式二：ufw
+# ────────────────────────────────────────
+elif [[ "$FIREWALL_CHOICE" == "2" ]]; then
+    apt install -y ufw
+
+    ufw default deny incoming
+    ufw default allow outgoing
+
+    for entry in "${ALL_PORTS[@]}"; do
+        ufw allow "$entry"
+        success "已开放端口: $entry"
+    done
+
+    ufw --force enable
+    echo ""
+    ufw status verbose
+    echo ""
+    warn "请确认以上防火墙规则无误。"
+    if ! confirm "UFW 规则确认无误，继续（将重启 sshd 服务）?"; then
+        warn "如需调整，请手动执行 ufw 相关命令后继续。"
+    fi
 fi
 
 systemctl restart sshd || systemctl restart ssh
