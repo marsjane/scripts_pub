@@ -229,6 +229,9 @@ if ! grep -q "# CUSTOM_CONFIG_MARKER" "$ZSHRC"; then
     cat <<EOF >> "$ZSHRC"
 
 # CUSTOM_CONFIG_MARKER
+# 彻底禁用括号化粘贴模式
+unset zle_bracketed_paste
+
 export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
 alias ll='ls -alF'
